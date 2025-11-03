@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import folium
+from matplotlib.colors import to_hex
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
@@ -205,3 +207,66 @@ else:
     print("No 'host_id' column found. Skipping host-level clustering.")
 
 print("\nAll tasks completed successfully on cleaned data!")
+
+print("\nGenerating interactive listing cluster map with named colors...")
+
+df_map = df.copy()
+
+# Map numeric clusters to names
+cluster_name_map = {
+    0: "Budget",
+    1: "Mid-range",
+    2: "Premium"
+}
+df_map['Listing_Cluster_Name'] = df_map['Listing_Cluster'].map(cluster_name_map)
+
+# Define custom colors
+color_map = {
+    "Budget": "blue",
+    "Mid-range": "green",
+    "Premium": "red"
+}
+
+print("Cluster color mapping:", color_map)
+
+# Create base map
+m = folium.Map(
+    location=[df_map['latitude'].mean(), df_map['longitude'].mean()],
+    zoom_start=11,
+    tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attr='Esri World Imagery'
+)
+
+# Add points
+for _, row in df_map.iterrows():
+    cluster = row['Listing_Cluster_Name']
+    color = color_map.get(cluster, 'gray')
+    folium.CircleMarker(
+        location=[row['latitude'], row['longitude']],
+        radius=3,
+        color=color,
+        fill=True,
+        fill_color=color,
+        fill_opacity=0.6,
+        popup=f"{cluster} | Price: ${row['price']:.0f} | Reviews (LTM): {row['number_of_reviews_ltm']}"
+    ).add_to(m)
+
+# Add legend
+legend_html = '''
+<div style="
+position: fixed;
+bottom: 40px; left: 40px; width: 180px; height: 120px;
+border:2px solid grey; z-index:9999; font-size:14px;
+background-color:white; padding:10px;">
+<b>Listing Clusters</b><br>
+<i style="background:blue;width:15px;height:15px;float:left;margin-right:8px;"></i>Budget<br>
+<i style="background:green;width:15px;height:15px;float:left;margin-right:8px;"></i>Mid-range<br>
+<i style="background:red;width:15px;height:15px;float:left;margin-right:8px;"></i>Premium<br>
+</div>
+'''
+m.get_root().html.add_child(folium.Element(legend_html))
+
+# Save map
+m.save('airbnb_listing_clusters_named_map.html')
+
+print("✅ Interactive colored listing cluster map saved as 'airbnb_listing_clusters_named_map.html'.")
